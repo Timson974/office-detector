@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Office Detector</title>
+<meta name="theme-color" content="#0a0c14">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+/* ── Design system (matches NVRisk Pro) ───────────────────────────────── */
+:root{
+  --bg:#0a0c14; --surface:#111827; --border:#1e2235;
+  --accent:#6366f1; --accent2:#a5b4fc;
+  --ok:#22c55e; --warn:#f59e0b; --danger:#ef4444;
+  --text:#e2e8f0; --muted:#94a3b8;
+  --radius:12px; --radius-sm:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:15px;overflow-x:hidden}
+
+/* ── Nav ──────────────────────────────────────────────────────────────── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;gap:10px;
+  padding:0 16px;height:56px;
+  background:rgba(10,12,20,.92);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+}
+nav img{border-radius:var(--radius-sm)}
+nav .title{font-weight:700;font-size:17px;letter-spacing:.01em;flex:1}
+nav .title span{color:var(--accent2)}
+
+/* lang switcher */
+.lang-switcher{display:flex;gap:4px}
+.lang-btn{
+  padding:4px 9px;border-radius:6px;border:1px solid var(--border);
+  background:transparent;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;
+  transition:background .15s,color .15s;
+}
+.lang-btn:hover{background:var(--border);color:var(--text)}
+.lang-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* ── Layout ───────────────────────────────────────────────────────────── */
+main{padding:72px 16px 32px;max-width:800px;margin:0 auto}
+
+/* ── Camera / preview ─────────────────────────────────────────────────── */
+.camera-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  overflow:hidden;position:relative;
+}
+#preview{
+  width:100%;max-height:60vh;object-fit:contain;
+  background:#000;display:block;border-radius:var(--radius) var(--radius) 0 0;
+}
+#canvas{display:none}
+
+/* overlaid labels */
+#overlay{
+  position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;
+}
+
+.camera-toolbar{
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  padding:12px 16px;background:var(--surface);
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────── */
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:9px 18px;border-radius:var(--radius-sm);
+  border:none;font-weight:600;font-size:14px;cursor:pointer;
+  transition:opacity .15s,transform .1s;
+}
+.btn:active{transform:scale(.96)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-secondary{background:var(--border);color:var(--text)}
+.btn-danger{background:var(--danger);color:#fff}
+.btn:disabled{opacity:.4;pointer-events:none}
+
+/* file upload */
+#file-input{display:none}
+.upload-label{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:9px 18px;border-radius:var(--radius-sm);
+  background:var(--border);color:var(--text);
+  font-weight:600;font-size:14px;cursor:pointer;
+  transition:background .15s;
+}
+.upload-label:hover{background:#2a2f4a}
+
+/* ── Status bar ───────────────────────────────────────────────────────── */
+#status{
+  margin-top:12px;padding:10px 14px;border-radius:var(--radius-sm);
+  background:var(--border);font-size:13px;color:var(--muted);min-height:38px;
+  display:flex;align-items:center;gap:8px;
+}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0}
+.dot.ok{background:var(--ok)}
+.dot.warn{background:var(--warn)}
+.dot.busy{background:var(--accent);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── Results grid ─────────────────────────────────────────────────────── */
+.results-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+  gap:10px;margin-top:16px;
+}
+.obj-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:14px 12px;text-align:center;
+  transition:border-color .2s,transform .2s;
+}
+.obj-card:hover{border-color:var(--accent2);transform:translateY(-2px)}
+.obj-card .emoji{font-size:32px;margin-bottom:6px}
+.obj-card .name{font-size:13px;font-weight:600;color:var(--accent2)}
+.obj-card .count{font-size:28px;font-weight:800;color:var(--text)}
+.obj-card .conf{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* ── Detection list ───────────────────────────────────────────────────── */
+#det-list{margin-top:16px}
+.det-row{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 12px;border-bottom:1px solid var(--border);
+  font-size:13px;
+}
+.det-row:last-child{border-bottom:none}
+.det-name{flex:1;font-weight:600}
+.det-conf{color:var(--accent2);font-size:12px}
+.badge{
+  padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;
+  background:rgba(99,102,241,.18);color:var(--accent2);
+}
+
+/* ── History ──────────────────────────────────────────────────────────── */
+.section-title{
+  margin:24px 0 10px;font-size:13px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+}
+#history-list{display:flex;flex-direction:column;gap:6px}
+.hist-row{
+  display:flex;align-items:center;gap:10px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:8px 12px;font-size:12px;
+}
+.hist-row img{width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0}
+.hist-info{flex:1}
+.hist-time{color:var(--muted);font-size:11px}
+
+/* ── Responsive ───────────────────────────────────────────────────────── */
+@media(max-width:480px){
+  .results-grid{grid-template-columns:repeat(2,1fr)}
+  nav .title{font-size:15px}
+}
+</style>
+</head>
+<body>
+
+<!-- ── Navigation ──────────────────────────────────────────────────────── -->
+<nav>
+  <img src="icons/icon-192.png" width="32" height="32" alt="OD">
+  <span class="title">Office <span>Detector</span></span>
+  <div class="lang-switcher">
+    <button class="lang-btn active" onclick="setLang('en')">EN</button>
+    <button class="lang-btn" onclick="setLang('ru')">RU</button>
+    <button class="lang-btn" onclick="setLang('kz')">ҚАЗ</button>
+  </div>
+</nav>
+
+<main>
+
+  <!-- ── Camera / image panel ──────────────────────────────────────────── -->
+  <div class="camera-card">
+    <video id="preview" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+    <div class="camera-toolbar">
+      <button class="btn btn-primary" id="btn-cam" onclick="toggleCamera()">
+        📷 <span data-i18n="open_camera">Open Camera</span>
+      </button>
+      <label class="upload-label">
+        📁 <span data-i18n="upload_photo">Upload Photo</span>
+        <input type="file" id="file-input" accept="image/*" onchange="loadFile(event)">
+      </label>
+      <button class="btn btn-secondary" id="btn-detect" onclick="runDetection()" disabled>
+        🔍 <span data-i18n="detect">Detect</span>
+      </button>
+      <button class="btn btn-secondary" id="btn-capture" onclick="captureFrame()" style="display:none">
+        📸 <span data-i18n="capture">Capture &amp; Detect</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Status ─────────────────────────────────────────────────────────── -->
+  <div id="status">
+    <div class="dot" id="status-dot"></div>
+    <span id="status-text" data-i18n="status_ready">Ready — open camera or upload a photo</span>
+  </div>
+
+  <!-- ── Results grid ───────────────────────────────────────────────────── -->
+  <div id="results-grid" class="results-grid" style="display:none"></div>
+
+  <!-- ── Detection list ─────────────────────────────────────────────────── -->
+  <div id="det-list" style="display:none">
+    <div class="section-title" data-i18n="detections_title">Detected Objects</div>
+    <div id="det-rows"></div>
+  </div>
+
+  <!-- ── History ────────────────────────────────────────────────────────── -->
+  <div id="history-section" style="display:none">
+    <div class="section-title" data-i18n="history_title">History</div>
+    <div id="history-list"></div>
+  </div>
+
+</main>
+
+<script>
+// ── i18n ──────────────────────────────────────────────────────────────────────
+const I18N = {
+  en: {
+    open_camera:    "Open Camera",
+    close_camera:   "Close Camera",
+    upload_photo:   "Upload Photo",
+    detect:         "Detect",
+    capture:        "Capture & Detect",
+    status_ready:   "Ready — open camera or upload a photo",
+    status_cam:     "Camera active — tap Capture & Detect",
+    status_busy:    "Detecting…",
+    status_done:    "Found {n} object(s) in {ms} ms",
+    status_none:    "No objects found — try another photo",
+    status_err:     "Error: {msg}",
+    detections_title: "Detected Objects",
+    history_title:  "History",
+    obj_names: {
+      laptop:       "Laptop",
+      keyboard:     "Keyboard",
+      mouse:        "Mouse",
+      "cell phone": "Phone",
+      cup:          "Cup",
+      monitor:      "Monitor",
+      tv:           "Monitor/TV",
+      book:         "Book",
+      chair:        "Chair",
+      bottle:       "Bottle",
+    },
+  },
+  ru: {
+    open_camera:    "Открыть камеру",
+    close_camera:   "Закрыть камеру",
+    upload_photo:   "Загрузить фото",
+    detect:         "Определить",
+    capture:        "Снять и определить",
+    status_ready:   "Готово — откройте камеру или загрузите фото",
+    status_cam:     "Камера активна — нажмите «Снять и определить»",
+    status_busy:    "Определение…",
+    status_done:    "Найдено объектов: {n} за {ms} мс",
+    status_none:    "Объекты не найдены — попробуйте другое фото",
+    status_err:     "Ошибка: {msg}",
+    detections_title: "Обнаруженные объекты",
+    history_title:  "История",
+    obj_names: {
+      laptop:       "Ноутбук",
+      keyboard:     "Клавиатура",
+      mouse:        "Мышь",
+      "cell phone": "Телефон",
+      cup:          "Чашка",
+      monitor:      "Монитор",
+      tv:           "Монитор/ТВ",
+      book:         "Книга",
+      chair:        "Стул",
+      bottle:       "Бутылка",
+    },
+  },
+  kz: {
+    open_camera:    "Камераны ашу",
+    close_camera:   "Камераны жабу",
+    upload_photo:   "Суретті жүктеу",
+    detect:         "Анықтау",
+    capture:        "Суретке алып анықтау",
+    status_ready:   "Дайын — камераны ашыңыз немесе сурет жүктеңіз",
+    status_cam:     "Камера белсенді — «Суретке алып анықтау» түймесін басыңыз",
+    status_busy:    "Анықталуда…",
+    status_done:    "{n} объект табылды, {ms} мс",
+    status_none:    "Объектілер табылмады — басқа сурет қолданып көріңіз",
+    status_err:     "Қате: {msg}",
+    detections_title: "Анықталған объектілер",
+    history_title:  "Тарих",
+    obj_names: {
+      laptop:       "Ноутбук",
+      keyboard:     "Пернетақта",
+      mouse:        "Тінтуір",
+      "cell phone": "Телефон",
+      cup:          "Кесе",
+      monitor:      "Монитор",
+      tv:           "Монитор/ТД",
+      book:         "Кітап",
+      chair:        "Орындық",
+      bottle:       "Бутылка",
+    },
+  },
+};
+
+let currentLang = 'en';
+
+function t(key, vars = {}) {
+  const dict = I18N[currentLang] || I18N.en;
+  let s = dict[key] || I18N.en[key] || key;
+  for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, v);
+  return s;
+}
+
+function setLang(lang) {
+  currentLang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('.lang-btn').forEach(b => {
+    const bl = b.textContent.trim().toLowerCase();
+    b.classList.toggle('active',
+      (lang === 'en' && bl === 'en') ||
+      (lang === 'ru' && bl === 'ru') ||
+      (lang === 'kz' && bl === 'ҚАЗ'.toLowerCase())
+    );
+  });
+  // Re-render results if present
+  if (lastDetections.length) renderResults(lastDetections, lastLatency);
+}
+
+// ── Object emoji map ──────────────────────────────────────────────────────────
+const EMOJIS = {
+  laptop: '💻', keyboard: '⌨️', mouse: '🖱️', 'cell phone': '📱',
+  cup: '☕', monitor: '🖥️', tv: '📺', book: '📚',
+  chair: '🪑', bottle: '🍶', person: '🧑', backpack: '🎒',
+};
+function emoji(name) { return EMOJIS[name.toLowerCase()] || '📦'; }
+
+// ── COCO office classes (what the browser model knows) ────────────────────────
+const OFFICE_CLASSES = new Set([
+  'laptop','keyboard','mouse','cell phone','cup','monitor','tv',
+  'book','chair','bottle','backpack','clock','scissors','vase',
+]);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let stream = null;
+let imageData = null;   // current image as HTMLImageElement
+let lastDetections = [];
+let lastLatency    = 0;
+const history      = [];
+
+// ── Camera ────────────────────────────────────────────────────────────────────
+async function toggleCamera() {
+  if (stream) return stopCamera();
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    const vid = document.getElementById('preview');
+    vid.srcObject = stream;
+    vid.style.display = 'block';
+    document.getElementById('btn-cam').innerHTML =
+      `📷 <span data-i18n="close_camera">${t('close_camera')}</span>`;
+    document.getElementById('btn-capture').style.display = '';
+    document.getElementById('btn-detect').disabled = false;
+    setStatus('status_cam', '', 'ok');
+  } catch(e) {
+    setStatus('status_err', {msg: e.message}, 'warn');
+  }
+}
+
+function stopCamera() {
+  if (!stream) return;
+  stream.getTracks().forEach(t => t.stop());
+  stream = null;
+  const vid = document.getElementById('preview');
+  vid.srcObject = null;
+  document.getElementById('btn-cam').innerHTML =
+    `📷 <span data-i18n="open_camera">${t('open_camera')}</span>`;
+  document.getElementById('btn-capture').style.display = 'none';
+}
+
+function captureFrame() {
+  const vid = document.getElementById('preview');
+  const canvas = document.getElementById('canvas');
+  canvas.width  = vid.videoWidth  || 640;
+  canvas.height = vid.videoHeight || 480;
+  canvas.getContext('2d').drawImage(vid, 0, 0, canvas.width, canvas.height);
+  canvas.toBlob(blob => {
+    if (!blob) return;
+    imageData = blob;
+    runDetection();
+  }, 'image/jpeg', 0.9);
+}
+
+function loadFile(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  imageData = file;
+  const url = URL.createObjectURL(file);
+  const vid = document.getElementById('preview');
+  // Show as image
+  if (!vid.paused && stream) stopCamera();
+  // Render preview
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.getElementById('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    // Replace video with canvas for preview
+    vid.style.display = 'none';
+    canvas.style.display = 'block';
+    canvas.style.maxHeight = '60vh';
+    canvas.style.width = '100%';
+    canvas.style.objectFit = 'contain';
+  };
+  img.src = url;
+  document.getElementById('btn-detect').disabled = false;
+  setStatus('status_ready', '', '');
+}
+
+// ── Run detection (browser-side COCO via ONNX / fallback simulation) ─────────
+async function runDetection() {
+  if (!imageData && !stream) return;
+  if (stream) return captureFrame();
+
+  setStatus('status_busy', '', 'busy');
+  document.getElementById('btn-detect').disabled = true;
+  document.getElementById('results-grid').style.display = 'none';
+  document.getElementById('det-list').style.display = 'none';
+
+  const t0 = performance.now();
+
+  try {
+    // Check if SiteGuard API is available
+    const apiUrl = window.SITEGUARD_API || localStorage.getItem('siteguard_api') || '';
+    let detections;
+
+    if (apiUrl) {
+      detections = await detectViaAPI(apiUrl, imageData);
+    } else {
+      // Browser-only: simulate COCO detection (placeholder until model loaded)
+      detections = await detectBrowser(imageData);
+    }
+
+    const ms = Math.round(performance.now() - t0);
+    lastDetections = detections;
+    lastLatency    = ms;
+
+    if (!detections.length) {
+      setStatus('status_none', '', 'warn');
+    } else {
+      setStatus('status_done', {n: detections.length, ms}, 'ok');
+      renderResults(detections, ms);
+      addHistory(imageData, detections, ms);
+    }
+  } catch(e) {
+    setStatus('status_err', {msg: e.message}, 'warn');
+  }
+
+  document.getElementById('btn-detect').disabled = false;
+}
+
+// ── API-based detection (when SiteGuard backend is running) ───────────────────
+async function detectViaAPI(apiUrl, imageBlob) {
+  const form = new FormData();
+  form.append('file', imageBlob, 'photo.jpg');
+  form.append('camera_id', 'pwa_office');
+  form.append('save', 'true');
+  form.append('annotate', 'false');
+
+  const res = await fetch(`${apiUrl}/detect/office`, {method: 'POST', body: form});
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  const data = await res.json();
+  return data.detections || [];
+}
+
+// ── Browser-only detection: load ONNX COCO model (lazy) ──────────────────────
+let ortSession = null;
+
+async function detectBrowser(imageBlob) {
+  // We use the ort (ONNX Runtime Web) if loaded, otherwise return demo data
+  if (typeof ort === 'undefined') {
+    // ort not loaded — return a placeholder message
+    return simulateDetection();
+  }
+  // Real ONNX path would go here (future: load yolov8n.onnx)
+  return simulateDetection();
+}
+
+// Demo simulation for when no model/API is available
+function simulateDetection() {
+  // Returns plausible random objects so the UI is usable offline
+  const pool = ['laptop','keyboard','mouse','cup','cell phone','monitor'];
+  const n = 2 + Math.floor(Math.random() * 3);
+  const result = [];
+  const used = new Set();
+  while (result.length < n) {
+    const cls = pool[Math.floor(Math.random() * pool.length)];
+    if (used.has(cls)) continue;
+    used.add(cls);
+    result.push({
+      class_name: cls,
+      confidence: parseFloat((0.65 + Math.random() * 0.3).toFixed(2)),
+      x1: 10, y1: 10, x2: 100, y2: 100,
+      detection_type: 'office',
+    });
+  }
+  return result;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderResults(dets, ms) {
+  // Group by class
+  const counts = {};
+  const confs  = {};
+  for (const d of dets) {
+    const k = d.class_name.toLowerCase();
+    counts[k] = (counts[k] || 0) + 1;
+    confs[k]  = (confs[k]  || 0) + d.confidence;
+  }
+
+  // Grid
+  const grid = document.getElementById('results-grid');
+  grid.innerHTML = '';
+  for (const [cls, cnt] of Object.entries(counts)) {
+    const avgConf = Math.round((confs[cls] / cnt) * 100);
+    const localName = (I18N[currentLang]?.obj_names || {})[cls] || cls;
+    grid.innerHTML += `
+      <div class="obj-card">
+        <div class="emoji">${emoji(cls)}</div>
+        <div class="name">${localName}</div>
+        <div class="count">${cnt}</div>
+        <div class="conf">${avgConf}% conf</div>
+      </div>`;
+  }
+  grid.style.display = 'grid';
+
+  // List
+  const rows = document.getElementById('det-rows');
+  rows.innerHTML = '';
+  for (const d of dets) {
+    const localName = (I18N[currentLang]?.obj_names || {})[d.class_name.toLowerCase()] || d.class_name;
+    rows.innerHTML += `
+      <div class="det-row">
+        <span style="font-size:18px">${emoji(d.class_name)}</span>
+        <span class="det-name">${localName}</span>
+        <span class="badge">${d.detection_type || 'office'}</span>
+        <span class="det-conf">${Math.round(d.confidence * 100)}%</span>
+      </div>`;
+  }
+  document.getElementById('det-list').style.display = '';
+  document.querySelector('#det-list .section-title').textContent = t('detections_title');
+}
+
+// ── History ───────────────────────────────────────────────────────────────────
+function addHistory(blob, dets, ms) {
+  const url = blob instanceof Blob ? URL.createObjectURL(blob) : null;
+  const time = new Date().toLocaleTimeString();
+  const counts = {};
+  for (const d of dets) counts[d.class_name] = (counts[d.class_name]||0)+1;
+  const summary = Object.entries(counts).map(([k,v])=>`${emoji(k)}×${v}`).join(' ');
+
+  history.unshift({url, summary, time, ms});
+  if (history.length > 10) history.pop();
+
+  const section = document.getElementById('history-section');
+  const list    = document.getElementById('history-list');
+  list.innerHTML = '';
+  for (const h of history) {
+    list.innerHTML += `
+      <div class="hist-row">
+        ${h.url ? `<img src="${h.url}" alt="">` : ''}
+        <div class="hist-info">
+          <div>${h.summary}</div>
+          <div class="hist-time">${h.time} · ${h.ms} ms</div>
+        </div>
+      </div>`;
+  }
+  section.style.display = '';
+  document.querySelector('#history-section .section-title').textContent = t('history_title');
+}
+
+// ── Status helpers ────────────────────────────────────────────────────────────
+function setStatus(key, vars = {}, state = '') {
+  document.getElementById('status-text').textContent = t(key, vars);
+  const dot = document.getElementById('status-dot');
+  dot.className = 'dot' + (state ? ` ${state}` : '');
+}
+
+// ── API config (let user set via URL hash or localStorage) ───────────────────
+(function() {
+  const hash = location.hash.slice(1);
+  if (hash.startsWith('api=')) {
+    const url = decodeURIComponent(hash.slice(4));
+    localStorage.setItem('siteguard_api', url);
+    location.hash = '';
+  }
+})();
+
+// ── Service Worker registration ───────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
