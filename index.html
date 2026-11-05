@@ -489,7 +489,8 @@ const COCO_CLASSES = [
 ];
 
 // ── Browser-only detection: real YOLOv8n ONNX ────────────────────────────────
-const MODEL_URL = 'https://cdn.jsdelivr.net/gh/Timson974/office-detector@main/yolov8n.onnx';
+// Primary: Hugging Face (CORS-friendly)
+const MODEL_URL = 'https://huggingface.co/Xenova/yolov8n/resolve/main/onnx/model.onnx';
 const MODEL_FALLBACK = 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/yolov8n.onnx';
 let ortSession = null;
 let modelLoading = false;
@@ -510,12 +511,26 @@ async function loadModel() {
     ort.env.wasm.numThreads = 1;  // GitHub Pages doesn't support SharedArrayBuffer
     const statusEl = document.querySelector('.status-text');
     if (statusEl) statusEl.textContent = '⬇️ Loading AI model (~6MB)…';
-    ortSession = await ort.InferenceSession.create(MODEL_FALLBACK, {
-      executionProviders: ['wasm'],
-      sessionOptions: { executionMode: 'sequential' },
-    });
+    const urls = [MODEL_URL, MODEL_FALLBACK];
+    let lastErr;
+    for (const url of urls) {
+      try {
+        console.log('Trying model URL:', url);
+        ortSession = await ort.InferenceSession.create(url, {
+          executionProviders: ['wasm'],
+          sessionOptions: { executionMode: 'sequential' },
+        });
+        console.log('Model loaded from:', url);
+        modelLoading = false;
+        return ortSession;
+      } catch(e) {
+        console.warn('Failed URL:', url, e.message);
+        lastErr = e;
+      }
+    }
+    modelError = 'Model load failed: ' + lastErr.message;
     modelLoading = false;
-    return ortSession;
+    throw new Error(modelError);
   } catch(e) {
     modelError = 'Model load failed: ' + e.message;
     modelLoading = false;
