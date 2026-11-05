@@ -507,10 +507,12 @@ async function loadModel() {
   modelLoading = true;
   try {
     ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/';
+    ort.env.wasm.numThreads = 1;  // GitHub Pages doesn't support SharedArrayBuffer
     const statusEl = document.querySelector('.status-text');
     if (statusEl) statusEl.textContent = '⬇️ Loading AI model (~6MB)…';
     ortSession = await ort.InferenceSession.create(MODEL_FALLBACK, {
       executionProviders: ['wasm'],
+      sessionOptions: { executionMode: 'sequential' },
     });
     modelLoading = false;
     return ortSession;
