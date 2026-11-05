@@ -575,10 +575,14 @@ function computeIoU(a, b) {
 }
 
 async function detectBrowser(imageBlob) {
-  if (typeof ort === 'undefined') return simulateDetection();
+  if (typeof ort === 'undefined') {
+    console.warn('ort not loaded, using simulation');
+    return simulateDetection();
+  }
 
   try {
     const session = await loadModel();
+    console.log('Model loaded OK, running inference...');
     const { tensor, scale, dw, dh, origW, origH } = await imageToTensor(imageBlob);
 
     const feeds = { images: tensor };
@@ -632,8 +636,9 @@ async function detectBrowser(imageBlob) {
     return finalBoxes;
 
   } catch(e) {
-    console.warn('ONNX error, falling back to simulation:', e);
-    return simulateDetection();
+    console.error('ONNX error:', e);
+    setStatus('status_err', {msg: e.message}, 'warn');
+    return [];
   }
 }
 
