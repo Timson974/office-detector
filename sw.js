@@ -1,4 +1,4 @@
-const CACHE = 'od-v5';
+const CACHE = 'od-v6';
 const ASSETS = [
   '/office-detector/',
   '/office-detector/index.html',

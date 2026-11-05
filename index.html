@@ -489,9 +489,14 @@ const COCO_CLASSES = [
 ];
 
 // ── Browser-only detection: real YOLOv8n ONNX ────────────────────────────────
-// Primary: Hugging Face (CORS-friendly)
-const MODEL_URL = 'https://huggingface.co/Xenova/yolov8n/resolve/main/onnx/model.onnx';
-const MODEL_FALLBACK = 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/yolov8n.onnx';
+// Model URLs - tried in order until one loads
+const MODEL_URLS = [
+  'https://cdn.jsdelivr.net/gh/Hyuto/yolov8-onnxruntime-web@master/public/model/yolov8n.onnx',
+  'https://huggingface.co/Xenova/yolov8n/resolve/main/onnx/model.onnx',
+  'https://github.com/Hyuto/yolov8-onnxruntime-web/raw/master/public/model/yolov8n.onnx',
+];
+const MODEL_URL = MODEL_URLS[0];
+const MODEL_FALLBACK = MODEL_URLS[1];
 let ortSession = null;
 let modelLoading = false;
 let modelError = null;
@@ -511,7 +516,7 @@ async function loadModel() {
     ort.env.wasm.numThreads = 1;  // GitHub Pages doesn't support SharedArrayBuffer
     const statusEl = document.querySelector('.status-text');
     if (statusEl) statusEl.textContent = '⬇️ Loading AI model (~6MB)…';
-    const urls = [MODEL_URL, MODEL_FALLBACK];
+    const urls = MODEL_URLS;
     let lastErr;
     for (const url of urls) {
       try {
