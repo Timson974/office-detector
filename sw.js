@@ -1,8 +1,9 @@
-const CACHE = 'od-v7';
+const CACHE = 'od-v9';
 const ASSETS = [
   '/office-detector/',
   '/office-detector/index.html',
   '/office-detector/manifest.json',
+  '/office-detector/favicon.ico',
   '/office-detector/icons/icon-192.png',
   '/office-detector/icons/icon-512.png',
 ];
