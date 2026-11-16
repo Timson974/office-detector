@@ -1,7 +1,8 @@
 {
   "name": "Office Detector",
   "short_name": "OD",
-  "start_url": "/",
+  "start_url": "/office-detector/",
+  "scope": "/office-detector/"
   "display": "standalone",
   "background_color": "#0a0c14",
   "theme_color": "#0a0c14",
